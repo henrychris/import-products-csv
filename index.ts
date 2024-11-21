@@ -25,6 +25,7 @@ async function processCsv(filePath: string, outputFile: string): Promise<void> {
         const price = parseFloat(row["Price"]);
         const compareAtPrice = parseFloat(row["Compare At Price"] || "0");
         const image = row["Image"];
+        const status = row["Status"];
 
         // If the current row defines new Option Names, update the lastOptionNames
         const currentOptionNames = buildAttributes(row);
@@ -58,6 +59,7 @@ async function processCsv(filePath: string, outputFile: string): Promise<void> {
                 category,
                 type,
                 tags,
+                status,
                 variants: [],
             };
         }
