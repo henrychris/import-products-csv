@@ -5,6 +5,8 @@ import { type Product, type ProductVariant } from "./interfaces/products";
 async function processCsv(filePath: string, outputFile: string): Promise<void> {
     const products: Product[] = [];
     let currentProduct: Product | null = null;
+    let lastOptionNames: Record<string, string> = {};
+    let lastMetafields: Record<string, string> = {};
 
     const stream = createReadStream(filePath).pipe(
         csv.parse({ headers: true })
@@ -12,7 +14,7 @@ async function processCsv(filePath: string, outputFile: string): Promise<void> {
 
     for await (const row of stream) {
         const title = row["Title"];
-		const handle = row["Handle"];
+        const handle = row["Handle"];
         const description = row["Description"];
         const category = row["Category"];
         const type = row["Type"];
@@ -23,22 +25,35 @@ async function processCsv(filePath: string, outputFile: string): Promise<void> {
         const price = parseFloat(row["Price"]);
         const compareAtPrice = parseFloat(row["Compare At Price"] || "0");
         const image = row["Image"];
-        const variantAttributes = buildAttributes(row);
-        const metafieldAttributes = parseMetafields(row);
 
-        const attributes = { ...variantAttributes, ...metafieldAttributes };
+        // If the current row defines new Option Names, update the lastOptionNames
+        const currentOptionNames = buildAttributes(row);
+        if (Object.keys(currentOptionNames).length > 0) {
+            lastOptionNames = { ...currentOptionNames };
+        }
 
+        // Inherit the last known option names if not explicitly defined
+        const variantAttributes = { ...lastOptionNames };
+
+        // If the current row defines new Metafield values, update the lastMetafields
+        const currentMetafields = parseMetafields(row);
+        if (Object.keys(currentMetafields).length > 0) {
+            lastMetafields = { ...currentMetafields };
+        }
+
+        // Combine variant attributes with inherited metafields
+        const attributes = { ...variantAttributes, ...lastMetafields };
+
+        // Start a new product if the title changes
         if (!currentProduct || currentProduct.handle !== handle) {
-            // Push the completed product to the list
             if (currentProduct) {
                 products.push(currentProduct);
             }
 
-            // Start a new product
             currentProduct = {
                 id: generateUUID(),
                 title,
-				handle,
+                handle,
                 description,
                 category,
                 type,
@@ -47,7 +62,7 @@ async function processCsv(filePath: string, outputFile: string): Promise<void> {
             };
         }
 
-        // Add variant to the current product
+        // Add the current variant to the current product
         if (currentProduct) {
             currentProduct.variants.push({
                 id: generateUUID(),
@@ -93,10 +108,9 @@ function parseMetafields(row: any): Record<string, string> {
     Object.keys(row).forEach((key) => {
         const match = key.match(/\((product\.metafields\..+)\)/);
         if (match && row[key]) {
-            const metafieldKey = match[1]
-                .replace(/^product\.metafields\./, "")
-                .toLowerCase();
-            attributes[metafieldKey] = row[key];
+            // Extract the visible name (e.g., 'Brand') as the key
+            const visibleName = key.split("(")[0].trim();
+            attributes[visibleName.toLowerCase()] = row[key];
         }
     });
     return attributes;
@@ -104,7 +118,7 @@ function parseMetafields(row: any): Record<string, string> {
 
 function generateUUID(): string {
     const str = crypto.randomUUID();
-	return str;
+    return str;
 }
 
 // Usage Example
