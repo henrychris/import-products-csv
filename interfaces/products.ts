@@ -12,9 +12,16 @@ export interface Product {
     title: string;
     handle: string;
     description: string;
-    category: string;
+    categoryId: string;
     type: string;
     status: string;
     tags: string[];
     variants: ProductVariant[];
+}
+
+export interface Category {
+    id: string;
+    name: string;
+    parentCategoryId: string;
+    attributes: Record<string, string>;
 }

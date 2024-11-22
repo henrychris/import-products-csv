@@ -1,6 +1,6 @@
-import { createReadStream, writeFileSync } from "fs";
+import { createReadStream, readFileSync, writeFileSync } from "fs";
 import csv from "fast-csv";
-import { type Product, type ProductVariant } from "./interfaces/products";
+import { type Category, type Product } from "./interfaces/products";
 
 async function processCsv(filePath: string, outputFile: string): Promise<void> {
     const products: Product[] = [];
@@ -8,6 +8,7 @@ async function processCsv(filePath: string, outputFile: string): Promise<void> {
     let lastOptionNames: Record<string, string> = {};
     let lastMetafields: Record<string, string> = {};
 
+    const categories = loadCategories("./data/seeded_categories.json");
     const stream = createReadStream(filePath).pipe(
         csv.parse({ headers: true })
     );
@@ -16,7 +17,7 @@ async function processCsv(filePath: string, outputFile: string): Promise<void> {
         const title = row["Title"];
         const handle = row["Handle"];
         const description = row["Description"];
-        const category = row["Category"];
+        const categoryPath = row["Product Category"];
         const type = row["Type"];
         const tags = row["Tags"]
             ? row["Tags"].split(",").map((tag: string) => tag.trim())
@@ -26,6 +27,10 @@ async function processCsv(filePath: string, outputFile: string): Promise<void> {
         const compareAtPrice = parseFloat(row["Compare At Price"] || "0");
         const image = row["Image"];
         const status = row["Status"];
+
+        // Get category ID from the category name
+        const categoryName = getCategoryName(categoryPath);
+        const categoryId = getCategoryIdByName(categoryName, categories);
 
         // If the current row defines new Option Names, update the lastOptionNames
         const currentOptionNames = buildAttributes(row);
@@ -56,7 +61,7 @@ async function processCsv(filePath: string, outputFile: string): Promise<void> {
                 title,
                 handle,
                 description,
-                category,
+                categoryId: categoryId || "gid://shopify/TaxonomyCategory/na", // uncategorised if not found
                 type,
                 tags,
                 status,
@@ -121,6 +126,29 @@ function parseMetafields(row: any): Record<string, string> {
 function generateUUID(): string {
     const str = crypto.randomUUID();
     return str;
+}
+
+function loadCategories(filePath: string): Category[] {
+    try {
+        const data = readFileSync(filePath, "utf8");
+        return JSON.parse(data);
+    } catch (err) {
+        console.error("Error loading categories JSON:", err);
+        return [];
+    }
+}
+
+function getCategoryIdByName(
+    name: string,
+    categories: Category[]
+): string | null {
+    const category = categories.find((c) => c.name === name);
+    return category ? category.id : null;
+}
+
+function getCategoryName(path: string) {
+    const levels = path.split(">").map((x) => x.trim());
+    return levels[levels.length - 1];
 }
 
 // Usage Example
